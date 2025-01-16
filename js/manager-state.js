@@ -74,7 +74,6 @@ const ManagerState = {
             const data = await response.json();
             if (data.status === 'success') {
                 this.modifiedPredictions.clear();
-                await this.loadPredictions();
             }
             return data;
         } catch (error) {
