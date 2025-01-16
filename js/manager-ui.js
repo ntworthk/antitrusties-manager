@@ -24,10 +24,13 @@ const ManagerUI = {
                 if (newStatus === 'pending') {
                     notesContainer.classList.add('hidden');
                     notesInput.value = '';
-                    ManagerState.updatePrediction(predictionId, newStatus, '');
+                    ManagerState.updatePrediction(predictionId, { status: newStatus });
                 } else {
                     notesContainer.classList.remove('hidden');
-                    ManagerState.updatePrediction(predictionId, newStatus, notesInput.value);
+                    ManagerState.updatePrediction(predictionId, { 
+                        status: newStatus,
+                        notes: notesInput.value
+                    });
                 }
                 
                 this.updateButtonStates(card, newStatus);
