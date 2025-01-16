@@ -1,6 +1,7 @@
 const ManagerUI = {
     initialize() {
         this.refreshButton = document.getElementById('refresh-button');
+        this.submitButton = document.getElementById('submit-button');
         this.predictionsGrid = document.querySelector('.predictions-grid');
         
         this.setupEventListeners();
@@ -9,31 +10,81 @@ const ManagerUI = {
 
     setupEventListeners() {
         this.refreshButton.addEventListener('click', () => this.loadPredictions());
+        this.submitButton.addEventListener('click', () => this.submitUpdates());
         
-        // Event delegation for status updates
-        this.predictionsGrid.addEventListener('click', async (e) => {
+        this.predictionsGrid.addEventListener('click', (e) => {
             if (e.target.classList.contains('status-button')) {
-                const predictionId = e.target.closest('.prediction-card').dataset.id;
+                const card = e.target.closest('.prediction-card');
+                const predictionId = card.dataset.id;
                 const newStatus = e.target.dataset.status;
                 
-                try {
-                    let notes = '';
-                    if (newStatus === 'correct' || newStatus === 'incorrect') {
-                        notes = prompt('Add any notes about this outcome:') || '';
-                    }
-                    
-                    const result = await ManagerState.updatePredictionStatus(predictionId, newStatus, notes);
-                    if (result?.status === 'error' && result?.message?.includes('Invalid authentication')) {
-                        localStorage.removeItem('authCode');
-                        alert('Authentication failed. Please try again.');
-                        return;
-                    }
-                    await this.loadPredictions();
-                } catch (error) {
-                    alert('Error updating prediction status');
+                const notesContainer = card.querySelector('.notes-container');
+                const notesInput = card.querySelector('.notes-input');
+                
+                if (newStatus === 'pending') {
+                    notesContainer.classList.add('hidden');
+                    notesInput.value = '';
+                    ManagerState.updatePrediction(predictionId, newStatus, '');
+                } else {
+                    notesContainer.classList.remove('hidden');
+                    ManagerState.updatePrediction(predictionId, newStatus, notesInput.value);
                 }
+                
+                this.updateButtonStates(card, newStatus);
+                this.updateSubmitButton();
             }
         });
+
+        this.predictionsGrid.addEventListener('input', (e) => {
+            if (e.target.matches('.notes-input, .prediction-text-input')) {
+                const card = e.target.closest('.prediction-card');
+                const predictionId = card.dataset.id;
+                const changes = {};
+                
+                if (e.target.classList.contains('notes-input')) {
+                    changes.notes = e.target.value;
+                } else {
+                    changes.text = e.target.value;
+                }
+                
+                if (e.target.classList.contains('notes-input')) {
+                    const status = card.querySelector('.status-button.active').dataset.status;
+                    changes.status = status;
+                }
+                
+                ManagerState.updatePrediction(predictionId, changes);
+                this.updateSubmitButton();
+            }
+        });
+    },
+
+    updateButtonStates(card, activeStatus) {
+        card.querySelectorAll('.status-button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.status === activeStatus);
+        });
+    },
+
+    updateSubmitButton() {
+        this.submitButton.disabled = !ManagerState.hasModifications();
+    },
+
+    async submitUpdates() {
+        try {
+            this.submitButton.disabled = true;
+            this.submitButton.textContent = 'Submitting...';
+            
+            const result = await ManagerState.submitUpdates();
+            if (result?.status === 'error' && result?.message?.includes('Invalid authentication')) {
+                localStorage.removeItem('authCode');
+            }
+            
+            this.loadPredictions();
+        } catch (error) {
+            console.error('Error submitting updates:', error);
+        } finally {
+            this.submitButton.disabled = false;
+            this.submitButton.textContent = 'Submit Changes';
+        }
     },
 
     async loadPredictions() {
@@ -41,8 +92,9 @@ const ManagerUI = {
             this.refreshButton.classList.add('rotating');
             await ManagerState.loadPredictions();
             this.renderPredictions();
+            this.updateSubmitButton();
         } catch (error) {
-            alert('Error loading predictions');
+            console.error('Error loading predictions:', error);
         } finally {
             this.refreshButton.classList.remove('rotating');
         }
@@ -75,8 +127,17 @@ const ManagerUI = {
                         <i class="fas ${statusIcon}"></i>
                     </div>
                     <div class="prediction-text-container">
-                        <p class="prediction-text">${prediction.text}</p>
-                        ${prediction.notes ? `<p class="prediction-notes">${prediction.notes}</p>` : ''}
+                        <textarea 
+                            class="prediction-text-input"
+                            rows="2"
+                        >${prediction.text}</textarea>
+                        <div class="notes-container ${prediction.status === 'pending' ? 'hidden' : ''}">
+                            <textarea 
+                                class="notes-input"
+                                placeholder="Add notes here..."
+                                rows="2"
+                            >${prediction.notes || ''}</textarea>
+                        </div>
                     </div>
                     <div class="status-controls">
                         <button class="status-button ${prediction.status === 'pending' ? 'active' : ''}"

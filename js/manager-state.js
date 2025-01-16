@@ -1,5 +1,6 @@
 const ManagerState = {
     predictions: [],
+    modifiedPredictions: new Map(),
 
     async loadPredictions() {
         try {
@@ -8,6 +9,7 @@ const ManagerState = {
             
             if (data.status === 'success') {
                 this.predictions = data.predictions;
+                this.modifiedPredictions.clear();
             } else if (data.message === 'No predictions table exists') {
                 this.predictions = [];
             } else {
@@ -29,35 +31,53 @@ const ManagerState = {
         localStorage.setItem('authCode', code);
     },
 
-    async updatePredictionStatus(predictionId, status, notes = '') {
-        try {
-            const authCode = this.getAuthCode();
-            if (!authCode) {
-                const code = prompt('Please enter the authentication code:');
-                if (!code) return null;
-                this.setAuthCode(code);
-            }
+    updatePrediction(id, changes) {
+        this.modifiedPredictions.set(id, {
+            ...this.modifiedPredictions.get(id) || {},
+            ...changes
+        });
+    },
 
-            const response = await fetch('https://cardioid.co.nz/api/update_prediction_status', {
+    hasModifications() {
+        return this.modifiedPredictions.size > 0;
+    },
+
+    async submitUpdates() {
+        if (!this.hasModifications()) return null;
+
+        const authCode = this.getAuthCode();
+        if (!authCode) {
+            const code = prompt('Please enter the authentication code:');
+            if (!code) return null;
+            this.setAuthCode(code);
+        }
+
+        try {
+            const updates = Array.from(this.modifiedPredictions.entries()).map(([id, data]) => ({
+                id,
+                status: data.status,
+                notes: data.notes
+            }));
+
+            const response = await fetch('https://cardioid.co.nz/api/update_predictions_batch', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    id: predictionId,
-                    status: status,
-                    notes: notes,
+                    updates,
                     auth_code: this.getAuthCode()
                 })
             });
 
             const data = await response.json();
             if (data.status === 'success') {
-                await this.loadPredictions(); // Refresh predictions after update
+                this.modifiedPredictions.clear();
+                await this.loadPredictions();
             }
             return data;
         } catch (error) {
-            console.error('Error updating prediction status:', error);
+            console.error('Error updating predictions:', error);
             throw error;
         }
     }
