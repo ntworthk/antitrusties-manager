@@ -55,8 +55,9 @@ const ManagerState = {
         try {
             const updates = Array.from(this.modifiedPredictions.entries()).map(([id, data]) => ({
                 id,
-                status: data.status,
-                notes: data.notes
+                ...(data.status && { status: data.status }),
+                ...(data.notes && { notes: data.notes }),
+                ...(data.text && { text: data.text })
             }));
 
             const response = await fetch('https://cardioid.co.nz/api/update_predictions_batch', {
