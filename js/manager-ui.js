@@ -86,7 +86,7 @@ const ManagerUI = {
             console.error('Error submitting updates:', error);
         } finally {
             this.submitButton.disabled = false;
-            this.submitButton.textContent = 'Submit Changes';
+            this.submitButton.textContent = 'Submit changes';
         }
     },
 
